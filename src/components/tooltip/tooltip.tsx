@@ -79,13 +79,13 @@ export const Tooltip = ({
             appendTo,
             animation,
             interactive,
-            placement,
-            zIndex,
-            popperOptions,
-            arrow,
-            allowHTML,
-            duration,
-            hideOnClick,
+            ...(placement !== undefined ? {placement} : {}),
+            ...(zIndex !== undefined ? {zIndex} : {}),
+            ...(popperOptions !== undefined ? {popperOptions} : {}),
+            ...(arrow !== undefined ? {arrow} : {}),
+            ...(allowHTML !== undefined ? {allowHTML} : {}),
+            ...(duration !== undefined ? {duration} : {}),
+            ...(hideOnClick !== undefined ? {hideOnClick} : {}),
             onCreate(createdInstance: Instance) {
                 if (className) {
                     createdInstance.popperChildren.tooltip.classList.add(...className.split(' ').filter(Boolean));

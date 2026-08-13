@@ -101,6 +101,21 @@ describe('Tooltip', () => {
         errorSpy.mockRestore();
     });
 
+    test('omits optional props entirely from the tippy() options object when the caller does not pass them', () => {
+        render(
+            <Tooltip content='hi'>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        const tippyMock = jest.requireMock('tippy.js').default;
+        const options = tippyMock.mock.calls[tippyMock.mock.calls.length - 1][1];
+
+        ['placement', 'zIndex', 'popperOptions', 'arrow', 'allowHTML', 'duration', 'hideOnClick'].forEach(key => {
+            expect(Object.keys(options)).not.toContain(key);
+        });
+    });
+
     test('shows tooltip content on hover and hides on unhover', async () => {
         render(
             <Tooltip content='tooltip text'>
