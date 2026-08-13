@@ -23,10 +23,33 @@ export interface TooltipProps {
     appendTo?: Element | ((ref: Element) => Element);
     animation?: string;
     arrow?: boolean;
+    enabled?: boolean;
+    visible?: boolean;
+    duration?: number;
+    allowHTML?: boolean;
+    className?: string;
+    hideOnClick?: boolean;
     children: React.ReactElement;
 }
 
-export const Tooltip = ({content, popperOptions, zIndex, placement, interactive = true, theme = 'light', appendTo = document.body, animation = 'fade', arrow, children}: TooltipProps) => {
+export const Tooltip = ({
+    content,
+    popperOptions,
+    zIndex,
+    placement,
+    interactive = true,
+    theme = 'light',
+    appendTo = document.body,
+    animation = 'fade',
+    arrow,
+    enabled = true,
+    visible,
+    duration,
+    allowHTML,
+    className,
+    hideOnClick,
+    children
+}: TooltipProps) => {
     const child = React.Children.only(children) as React.ReactElement<{ref?: React.Ref<Element>}>;
     const [target, setTarget] = React.useState<Element | null>(null);
     const instanceRef = React.useRef<Instance | null>(null);
@@ -59,7 +82,15 @@ export const Tooltip = ({content, popperOptions, zIndex, placement, interactive 
             placement,
             zIndex,
             popperOptions,
-            arrow
+            arrow,
+            allowHTML,
+            duration,
+            hideOnClick,
+            onCreate(createdInstance: Instance) {
+                if (className) {
+                    createdInstance.popperChildren.tooltip.classList.add(...className.split(' ').filter(Boolean));
+                }
+            }
         });
         instanceRef.current = instance;
 
@@ -70,13 +101,35 @@ export const Tooltip = ({content, popperOptions, zIndex, placement, interactive 
             queueMicrotask(() => reactRoot.unmount());
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [target, placement, interactive, zIndex, popperOptions, theme, appendTo, animation, arrow]);
+    }, [target, placement, interactive, zIndex, popperOptions, theme, appendTo, animation, arrow, allowHTML, duration, hideOnClick, className]);
 
     React.useEffect(() => {
         if (reactRootRef.current) {
             reactRootRef.current.render(content);
         }
     }, [content]);
+
+    React.useEffect(() => {
+        if (!instanceRef.current) {
+            return;
+        }
+        if (enabled) {
+            instanceRef.current.enable();
+        } else {
+            instanceRef.current.disable();
+        }
+    }, [target, enabled]);
+
+    React.useEffect(() => {
+        if (!instanceRef.current || visible === undefined) {
+            return;
+        }
+        if (visible) {
+            instanceRef.current.show(duration);
+        } else {
+            instanceRef.current.hide(duration);
+        }
+    }, [target, visible, duration]);
 
     return React.cloneElement(child, {ref: setRef});
 };

@@ -11,7 +11,12 @@ jest.mock('tippy.js', () => {
             contentNode.textContent = options.content;
         }
 
+        let isEnabled = true;
+
         const show = () => {
+            if (!isEnabled) {
+                return;
+            }
             if (!document.body.contains(contentNode)) {
                 document.body.appendChild(contentNode);
             }
@@ -22,16 +27,52 @@ jest.mock('tippy.js', () => {
             }
         };
 
+        const clickHide = () => {
+            if (options.hideOnClick === false) {
+                return;
+            }
+            hide();
+        };
+
         target.addEventListener('mouseenter', show);
         target.addEventListener('mouseleave', hide);
+        target.addEventListener('click', clickHide);
+
+        const tooltipBox = document.createElement('div');
+        tooltipBox.className = 'tippy-tooltip';
 
         const instance = {
             destroy: jest.fn(() => {
                 hide();
                 target.removeEventListener('mouseenter', show);
                 target.removeEventListener('mouseleave', hide);
-            })
+                target.removeEventListener('click', clickHide);
+            }),
+            show: jest.fn((duration?: number) => {
+                void duration;
+                show();
+            }),
+            hide: jest.fn((duration?: number) => {
+                void duration;
+                if (document.body.contains(contentNode)) {
+                    document.body.removeChild(contentNode);
+                }
+            }),
+            enable: jest.fn(() => {
+                isEnabled = true;
+            }),
+            disable: jest.fn(() => {
+                isEnabled = false;
+                if (document.body.contains(contentNode)) {
+                    document.body.removeChild(contentNode);
+                }
+            }),
+            popperChildren: {tooltip: tooltipBox}
         };
+
+        if (typeof options.onCreate === 'function') {
+            options.onCreate(instance);
+        }
 
         return instance;
     });
@@ -200,5 +241,109 @@ describe('Tooltip', () => {
 
         const tippyMock = jest.requireMock('tippy.js').default;
         expect(tippyMock).toHaveBeenCalledWith(received.node, expect.anything());
+    });
+
+    test('enabled={false} suppresses the tooltip from showing on hover', async () => {
+        render(
+            <Tooltip content='tooltip text' enabled={false}>
+                <span>hover me</span>
+            </Tooltip>
+        );
+
+        const tippyMock = jest.requireMock('tippy.js').default;
+        const instance = tippyMock.mock.results[tippyMock.mock.results.length - 1].value;
+        expect(instance.disable).toHaveBeenCalled();
+
+        await userEvent.hover(screen.getByText('hover me'));
+        expect(screen.queryByText('tooltip text')).not.toBeInTheDocument();
+    });
+
+    test('toggling enabled back to true re-enables the tooltip', async () => {
+        const {rerender} = render(
+            <Tooltip content='tooltip text' enabled={false}>
+                <span>hover me</span>
+            </Tooltip>
+        );
+
+        rerender(
+            <Tooltip content='tooltip text' enabled={true}>
+                <span>hover me</span>
+            </Tooltip>
+        );
+
+        const tippyMock = jest.requireMock('tippy.js').default;
+        const instance = tippyMock.mock.results[tippyMock.mock.results.length - 1].value;
+        expect(instance.enable).toHaveBeenCalled();
+
+        await userEvent.hover(screen.getByText('hover me'));
+        await waitFor(() => expect(screen.getByText('tooltip text')).toBeInTheDocument());
+    });
+
+    test('hideOnClick={false} keeps the tooltip visible after a click on the trigger', async () => {
+        render(
+            <Tooltip content='Copied!' hideOnClick={false}>
+                <span>click me</span>
+            </Tooltip>
+        );
+
+        const target = screen.getByText('click me');
+
+        await userEvent.hover(target);
+        await waitFor(() => expect(screen.getByText('Copied!')).toBeInTheDocument());
+
+        await userEvent.click(target);
+        expect(screen.getByText('Copied!')).toBeInTheDocument();
+    });
+
+    test('passes allowHTML, duration, and hideOnClick straight through to tippy()', () => {
+        render(
+            <Tooltip content='x' allowHTML={true} duration={200} hideOnClick={false}>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        const tippyMock = jest.requireMock('tippy.js').default;
+        expect(tippyMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                allowHTML: true,
+                duration: 200,
+                hideOnClick: false
+            })
+        );
+    });
+
+    test('className is applied to the tippy popper box via onCreate', () => {
+        render(
+            <Tooltip content='x' className='custom-tooltip'>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        const tippyMock = jest.requireMock('tippy.js').default;
+        const instance = tippyMock.mock.results[tippyMock.mock.results.length - 1].value;
+
+        expect(instance.popperChildren.tooltip.classList.contains('custom-tooltip')).toBe(true);
+    });
+
+    test('visible={true} calls instance.show(duration) and visible={false} calls instance.hide(duration)', () => {
+        const {rerender} = render(
+            <Tooltip content='x' visible={false} duration={150}>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        const tippyMock = jest.requireMock('tippy.js').default;
+        const instance = tippyMock.mock.results[tippyMock.mock.results.length - 1].value;
+
+        expect(instance.hide).toHaveBeenCalledWith(150);
+
+        rerender(
+            <Tooltip content='x' visible={true} duration={150}>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        expect(instance.show).toHaveBeenCalledWith(150);
     });
 });
