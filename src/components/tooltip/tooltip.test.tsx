@@ -41,7 +41,15 @@ jest.mock('tippy.js', () => {
         const tooltipBox = document.createElement('div');
         tooltipBox.className = 'tippy-tooltip';
 
+        let currentProps = {...options};
+
         const instance = {
+            setProps: jest.fn((partialProps: any) => {
+                currentProps = {...currentProps, ...partialProps};
+            }),
+            get props() {
+                return currentProps;
+            },
             destroy: jest.fn(() => {
                 hide();
                 target.removeEventListener('mouseenter', show);
@@ -360,5 +368,98 @@ describe('Tooltip', () => {
         );
 
         expect(instance.show).toHaveBeenCalledWith(150);
+    });
+
+    test('a prop change updates the existing tippy instance instead of destroying and recreating it', () => {
+        const tippyMock = jest.requireMock('tippy.js').default;
+        tippyMock.mockClear();
+
+        const {rerender} = render(
+            <Tooltip content='x' placement='top' popperOptions={{modifiers: {hide: {enabled: false}}}}>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        expect(tippyMock).toHaveBeenCalledTimes(1);
+        const instance = tippyMock.mock.results[0].value;
+
+        rerender(
+            <Tooltip content='x' placement='bottom' popperOptions={{modifiers: {hide: {enabled: false}}}}>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        expect(tippyMock).toHaveBeenCalledTimes(1);
+        expect(instance.destroy).not.toHaveBeenCalled();
+        expect(instance.setProps).toHaveBeenCalledWith(expect.objectContaining({placement: 'bottom'}));
+    });
+
+    test('setProps omits optional props the caller did not pass, so tippy defaults are preserved', () => {
+        const {rerender} = render(
+            <Tooltip content='x' theme='light'>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        const tippyMock = jest.requireMock('tippy.js').default;
+        const instance = tippyMock.mock.results[tippyMock.mock.results.length - 1].value;
+
+        rerender(
+            <Tooltip content='x' theme='dark'>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        const partialProps = instance.setProps.mock.calls[instance.setProps.mock.calls.length - 1][0];
+        ['placement', 'zIndex', 'popperOptions', 'arrow', 'allowHTML', 'duration', 'hideOnClick'].forEach(key => {
+            expect(Object.keys(partialProps)).not.toContain(key);
+        });
+    });
+
+    test('enabled={false} survives an unrelated prop change', async () => {
+        const {rerender} = render(
+            <Tooltip content='tooltip text' enabled={false} placement='top'>
+                <span>hover me</span>
+            </Tooltip>
+        );
+
+        const tippyMock = jest.requireMock('tippy.js').default;
+        const instance = tippyMock.mock.results[tippyMock.mock.results.length - 1].value;
+
+        rerender(
+            <Tooltip content='tooltip text' enabled={false} placement='bottom'>
+                <span>hover me</span>
+            </Tooltip>
+        );
+
+        expect(instance.enable).not.toHaveBeenCalled();
+
+        await userEvent.hover(screen.getByText('hover me'));
+        expect(screen.queryByText('tooltip text')).not.toBeInTheDocument();
+    });
+
+    test('a className change removes the old class and adds the new one', () => {
+        const {rerender} = render(
+            <Tooltip content='x' className='old-class shared-class'>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        const tippyMock = jest.requireMock('tippy.js').default;
+        const instance = tippyMock.mock.results[tippyMock.mock.results.length - 1].value;
+        const box = instance.popperChildren.tooltip;
+
+        expect(box.classList.contains('old-class')).toBe(true);
+
+        rerender(
+            <Tooltip content='x' className='new-class shared-class'>
+                <span>target</span>
+            </Tooltip>
+        );
+
+        expect(box.classList.contains('old-class')).toBe(false);
+        expect(box.classList.contains('new-class')).toBe(true);
+        expect(box.classList.contains('shared-class')).toBe(true);
+        expect(box.classList.contains('tippy-tooltip')).toBe(true);
     });
 });

@@ -54,6 +54,7 @@ export const Tooltip = ({
     const [target, setTarget] = React.useState<Element | null>(null);
     const instanceRef = React.useRef<Instance | null>(null);
     const reactRootRef = React.useRef<ReactDOM.Root | null>(null);
+    const appliedClassNamesRef = React.useRef<string[]>([]);
 
     const setRef = React.useCallback(
         (node: Element | null) => {
@@ -87,8 +88,10 @@ export const Tooltip = ({
             ...(duration !== undefined ? {duration} : {}),
             ...(hideOnClick !== undefined ? {hideOnClick} : {}),
             onCreate(createdInstance: Instance) {
-                if (className) {
-                    createdInstance.popperChildren.tooltip.classList.add(...className.split(' ').filter(Boolean));
+                const classes = className ? className.split(' ').filter(Boolean) : [];
+                appliedClassNamesRef.current = classes;
+                if (classes.length > 0) {
+                    createdInstance.popperChildren.tooltip.classList.add(...classes);
                 }
             }
         });
@@ -98,10 +101,52 @@ export const Tooltip = ({
             instance.destroy();
             instanceRef.current = null;
             reactRootRef.current = null;
+            appliedClassNamesRef.current = [];
             queueMicrotask(() => reactRoot.unmount());
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [target, placement, interactive, zIndex, popperOptions, theme, appendTo, animation, arrow, allowHTML, duration, hideOnClick, className]);
+    }, [target]);
+
+    React.useEffect(() => {
+        const instance = instanceRef.current;
+        if (!instance) {
+            return;
+        }
+
+        instance.setProps({
+            theme,
+            appendTo,
+            animation,
+            interactive,
+            ...(placement !== undefined ? {placement} : {}),
+            ...(zIndex !== undefined ? {zIndex} : {}),
+            ...(popperOptions !== undefined ? {popperOptions} : {}),
+            ...(arrow !== undefined ? {arrow} : {}),
+            ...(allowHTML !== undefined ? {allowHTML} : {}),
+            ...(duration !== undefined ? {duration} : {}),
+            ...(hideOnClick !== undefined ? {hideOnClick} : {})
+        });
+    }, [target, placement, interactive, zIndex, popperOptions, theme, appendTo, animation, arrow, allowHTML, duration, hideOnClick]);
+
+    React.useEffect(() => {
+        const instance = instanceRef.current;
+        if (!instance) {
+            return;
+        }
+
+        const next = className ? className.split(' ').filter(Boolean) : [];
+        const previous = appliedClassNamesRef.current;
+        const removed = previous.filter(cls => !next.includes(cls));
+        const added = next.filter(cls => !previous.includes(cls));
+        appliedClassNamesRef.current = next;
+
+        if (removed.length > 0) {
+            instance.popperChildren.tooltip.classList.remove(...removed);
+        }
+        if (added.length > 0) {
+            instance.popperChildren.tooltip.classList.add(...added);
+        }
+    }, [target, className]);
 
     React.useEffect(() => {
         if (reactRootRef.current) {
